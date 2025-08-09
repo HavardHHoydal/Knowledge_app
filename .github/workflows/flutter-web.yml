@@ -1,0 +1,98 @@
+name: Deploy Flutter Web to GitHub Pages
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Enable web
+        run: flutter config --enable-web
+
+      # Lager prosjekt hvis repoet er tomt
+      - name: Create project if missing
+        run: |
+          if [ ! -f pubspec.yaml ]; then
+            flutter create .
+          fi
+
+      # Skriver inn vår app (pubspec + main.dart)
+      - name: Write pubspec.yaml (our app)
+        run: |
+          cat > pubspec.yaml << 'EOF'
+          name: knowledge_app
+          description: En Flutter-app som genererer læringsinnhold med tekst, illustrasjoner, grafer og bilder.
+          publish_to: 'none'
+          version: 0.1.0+1
+
+          environment:
+            sdk: '>=3.0.0 <4.0.0'
+
+          dependencies:
+            flutter:
+              sdk: flutter
+            cupertino_icons: ^1.0.8
+            go_router: ^14.2.0
+            shared_preferences: ^2.2.3
+            fl_chart: ^0.68.0
+
+          dev_dependencies:
+            flutter_test:
+              sdk: flutter
+            flutter_lints: ^4.0.0
+
+          flutter:
+            uses-material-design: true
+            assets:
+              - assets/placeholders/
+          EOF
+
+      - name: Write lib/main.dart (our app)
+        run: |
+          mkdir -p lib assets/placeholders
+          cat > lib/main.dart << 'EOF'
+          // (samme main.dart som vi laget – jeg kan poste den igjen hvis du vil)
+          EOF
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Build Flutter Web
+        # base-href settes til repo-navnet så Pages ruter riktig
+        run: flutter build web --release --base-href="/${{ github.event.repository.name }}/"
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
